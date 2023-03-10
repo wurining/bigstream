@@ -145,6 +145,10 @@ def easifish_registration_pipeline(
                
     """
 
+    import cupy
+    mempool = cupy.get_default_memory_pool()
+    pinned_mempool = cupy.get_default_pinned_memory_pool()
+    
     # ensure lowres datasets are in memory
     fix_lowres = fix_lowres[...]
     mov_lowres = mov_lowres[...]
@@ -163,13 +167,16 @@ def easifish_registration_pipeline(
         ('ransac', {**a, **global_ransac_kwargs}),
         ('affine', {**b, **global_affine_kwargs}),
     ]
-
+    
     # run global affine alignment at lowres
     affine = alignment_pipeline(
         fix_lowres, mov_lowres,
         fix_lowres_spacing, mov_lowres_spacing,
         steps=steps,
     )
+    mempool.free_all_blocks()
+    pinned_mempool.free_all_blocks()
+    print("========================= PIPELINE 1 END =========================", flush=True)
 
     # apply global affine and save result
     aligned = apply_transform(
@@ -177,9 +184,12 @@ def easifish_registration_pipeline(
         fix_lowres_spacing, mov_lowres_spacing,
         transform_list=[affine,],
     )
+    print("========================= PIPELINE 2 END =========================", flush=True)
+
     np.savetxt(f'{write_directory}/affine.mat', affine)
     np.save(f'{write_directory}/affine.npy', aligned)
 
+    
     # configure local deformable alignment at highres
     a = {'blob_sizes':[6, 20]}
     b = {'smooth_sigmas':(0.25,),
@@ -216,6 +226,7 @@ def easifish_registration_pipeline(
         write_path=write_directory + '/deform.zarr',
         cluster=x,
     )
+    
     resample = lambda x: distributed_apply_transform(
         fix_highres, mov_highres,
         fix_highres_spacing, mov_highres_spacing,
@@ -232,8 +243,14 @@ def easifish_registration_pipeline(
             aligned = resample(cluster)
     # otherwise, use the cluster that was given
     else:
+        print("========================= PIPELINE 3 END =========================", flush=True)
         deform = alignment(cluster)
+        mempool.free_all_blocks()
+        pinned_mempool.free_all_blocks()
+        
+        print("========================= PIPELINE 4 END =========================", flush=True)
         aligned = resample(cluster)
+        
 
     return affine, deform, aligned
 

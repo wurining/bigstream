@@ -312,7 +312,8 @@ def distributed_piecewise_alignment_pipeline(
                     missing_weights[region] += weights[neighbor_region]
 
             # rebalance the weights
-            weights = weights / (1 - missing_weights)
+            missing_weights[np.where(missing_weights == 1)] = 1 - 0.000001
+            weights = weights / (1-missing_weights)
             weights[np.isnan(weights)] = 0.  # edges of blocks are 0/0
             weights = weights.astype(np.float32)
 
@@ -341,15 +342,17 @@ def distributed_piecewise_alignment_pipeline(
             # wait until the correct write window for this write group
             # TODO: if a worker can query the set of running tasks, I may be able to skip
             #       groups that are completely written
-            write_group = np.sum(np.array(block_index) % 3 * (9, 3, 1))
-            while not (write_group < time.time() / write_group_interval % 27 < write_group + .5):
-                time.sleep(1)
+            # write_group = np.sum(np.array(block_index) % 3 * (9, 3, 1))
+            # while not (write_group < time.time() / write_group_interval % 27 < write_group + .5):
+            #     time.sleep(1)
             output_transform[fix_slices] = output_transform[fix_slices] + transform
             return True
     # END CLOSURE
 
     # submit all alignments to cluster
-    futures = cluster.client.map(
+    
+    # futures = cluster.client.map(
+    futures = cluster.get_client().map(
         align_single_block, indices,
         static_transform_list=static_transform_list,
     )
@@ -364,7 +367,8 @@ def distributed_piecewise_alignment_pipeline(
                 transform[indices[iii][1]] += result
         return transform
     else:
-        all_written = np.all( cluster.client.gather(futures) )
+        # all_written = np.all( cluster.client.gather(futures) )
+        all_written = np.all( cluster.get_client().gather(futures) )
         return output_transform
 
 
