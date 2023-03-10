@@ -97,9 +97,12 @@ def pairwise_correlation(A, B):
         N is the length of A and M is the length of B
     """
 
-    # flatten contexts into array
+    # flatten contexts into array    
     a_con = np.array( [a.flatten() for a in A] )
     b_con = np.array( [b.flatten() for b in B] )
+    
+    if len(a_con) == 0 or len(b_con) == 0:
+        return None
 
     # get means and std for all contexts, center contexts
     a_mean, a_std = _stats(a_con)
@@ -138,7 +141,8 @@ def match_points(a_pos, b_pos, scores, threshold):
     matched_a_points, matched_b_points : two 2d-arrays both Px3
         The points from a_pos and b_pos that correspond
     """
-
+    if scores is None:
+        return np.empty((0, 3)), np.empty((0, 3))
     # get highest scores above threshold
     best_indcs = np.argmax(scores, axis=1)
     a_indcs = range(len(a_pos))
